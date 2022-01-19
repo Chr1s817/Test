@@ -1,0 +1,328 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "appConfigName": {
+            "defaultValue": "mobile-configuration-dev",
+            "type": "String",
+            "metadata": {
+                "description": "Specifies the name of the App Configuration store."
+            }
+        },
+        "appConfigSku": {
+            "defaultValue": "standard",
+            "type": "String"
+        },
+        "env": {
+            "type": "string",
+            "defaultValue": "dev",
+            "metadata": {
+                "description": "The name of the environment."
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        },
+        "rgNameArray": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "ResourceGroup Of the APP to be added to App Configuration Access list"
+            }
+        },
+        "appNameArray": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "metadata": {
+                "description": "Appname to be added to App Configuration Access list"
+            }
+        },
+        "roleAssignmentArray": {
+            "type": "array",
+            "defaultValue": [
+                {
+                    "roleAssignmentId": "[newGuid()]",
+                    "appNameArray": "[parameters('appNameArray')]",
+                    "rgNameArray": "[parameters('rgNameArray')]"
+                }
+            ],
+            "metadata": {
+                "description": "A new GUID used to identify the role assignment [newGuid()]"
+            }
+        },
+        "description": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Description of featureflag"
+            }
+        },
+        "featureFlagDeploy": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "allowed value true and false"
+            }
+        },
+        "featureFlagKey": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Specifies the key of the feature flag."
+            }
+        },
+        "featureFlagcontentType": {
+            "type": "string",
+            "defaultValue": "application/vnd.microsoft.appconfig.ff+json;charset=utf-8",
+            "metadata": {
+                "description": "Specifies the content type of the key-value resources. For feature flag, the value should be application/vnd.microsoft.appconfig.ff+json;charset=utf-8. For Key Value reference, the value should be application/vnd.microsoft.appconfig.keyvaultref+json;charset=utf-8. Otherwise, it's optional."
+            }
+        },
+        "featureFlagLabel": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Specifies the label of the feature flag. The label is optional and can be left as empty."
+            }
+        },
+        "conditions": {
+            "type": "object",
+            "defaultValue": {
+                "client_filters": []
+            }
+        },
+        "featureStatus": {
+            "type": "bool",
+            "defaultValue": false,
+            "metadata": {
+                "description": "allowed value true and false"
+            }
+        },
+        "featureFlagData": {
+            "type": "array",
+            "defaultValue": [
+                {
+                    "featureFlagKey": "[parameters('featureFlagKey')]",
+                    "featureFlagValue": "[parameters('featureFlagValue')]",
+                    "featureFlagLabel": "[parameters('featureFlagLabel')]",
+                    "FeatureFlagcontentType": "[parameters('FeatureFlagcontentType')]"
+                }
+            ]
+        },
+        "featureFlagValue": {
+            "type": "object",
+            "defaultValue": {
+                "id": "[parameters('featureFlagKey')]",
+                "description": "[parameters('description')]",
+                "enabled": "[parameters('featureStatus')]",
+                "conditions": "[parameters('conditions')]"
+            }
+        },
+        "keyvalueValue": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Specifies the values of the key-value resources. It's optional"
+            }
+        },
+        "keyvalueName": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Specifies the names of the key-value resources. The name is a combination of key and label with $ as delimiter. The label is optional"
+            }
+        },
+        "KeyvalueLabel": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Specifies the label of the feature flag. The label is optional and can be left as empty."
+            }
+        },
+        "KeyvaluecontentType": {
+            "type": "string",
+            "defaultValue": "application/vnd.microsoft.appconfig.ff+json;charset=utf-8",
+            "metadata": {
+                "description": "Specifies the content type of the key-value resources. For feature flag, the value should be application/vnd.microsoft.appconfig.ff+json;charset=utf-8. For Key Value reference, the value should be application/vnd.microsoft.appconfig.keyvaultref+json;charset=utf-8. Otherwise, it's optional."
+            }
+        },
+        // Use for array of keyvalue
+        "keyData": {
+            "type": "array",
+            "defaultValue": [
+                {
+                    "key": "[parameters('keyvalueName')]",
+                    "value": "[parameters('keyvalueValue')]", // Optional
+                    "label": "[parameters('KeyvalueLabel')]", //Optional
+                    "contentType": "[parameters('keyvaluecontentType')]" // Optional
+                }
+            ],
+            "metadata": {
+                "description": "Array of Objects that contain the key name, value, tag and contentType"
+            }
+        }
+    },
+    "variables": {
+        "vnetRGName": {
+            "dev": "rg-nw-core-np",
+            "qa": "rg-nw-core-np",
+            "uat": "rg-nw-core-np",
+            "prod": "rg-nw-core",
+            "dr": "rg-nw-core"
+        },
+        "publicNetworkAccess": {
+            "dev": "Enabled",
+            "qa": "Enabled",
+            "uat": "Disabled",
+            "prod": "Disabled"
+        },
+        "privateLinkVnetName": "[concat('vnet-nw-', parameters('env'), '-', variables('region'))]",
+        "privateLinkSubnetName": "[concat('subnet-', parameters('env'), '-privatelink-', variables('region'))]",
+        "region": "[if(equals(parameters('env'), 'dr'), 'aue', 'ause')]",
+        "privateDnsZoneWebRef": "/subscriptions/1ec0adcc-796d-443d-aea1-308fb7c74f64/resourceGroups/rg-nw-core/providers/Microsoft.Network/privateDnsZones/privatelink.azconfig.io",
+        "configPrivateEndPointsName": "[concat(parameters('appConfigName'), '-endpoint')]",
+        "privateLinkSubnetRef": "[resourceId(variables('vnetRGName')[parameters('env')], 'Microsoft.Network/virtualNetworks/subnets', variables('privateLinkVnetName'), variables('privateLinkSubnetName'))]"
+        //"featureFlagValue": {
+        //    "id": "[parameters('featureFlagKey')]",
+        //    "description": "Your description.",
+        //    "enabled": "[parameters('featureStatus')]",
+        //    "conditions": "[parameters('conditions')]"
+        //}
+    },
+    "resources": [
+        {
+            "type": "Microsoft.AppConfiguration/configurationStores",
+            "apiVersion": "2021-03-01-preview",
+            "name": "[parameters('appConfigName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "[parameters('appConfigSku')]"
+            },
+            "properties": {
+                "disableLocalAuth": false,
+                "encryption": {},
+                "publicNetworkAccess": "[variables('publicNetworkAccess')[parameters('env')]]"
+            } //,
+            //"resources": [
+            //    {
+            //        "condition": "[equals(parameters('featureFlagDeploy'), 'True')]",
+            //        "type": "keyValues",
+            //        "apiVersion": "2021-03-01-preview",
+            //        "name": "[concat('.appconfig.featureflag~2F', parameters('featureFlagKey'), '$', parameters('featureFlagLabel'))]",
+            //        "dependsOn": [
+            //            "[parameters('appConfigName')]"
+            //        ],
+            //        "properties": {
+            //            "contentType": "[parameters('featureFlagcontentType')]",
+            //            "value": "[string(parameters('featureFlagValue'))]"
+            //        }
+            //    }
+            //]
+        },
+        {
+            "condition": "[equals(parameters('featureFlagDeploy'), 'true')]",
+            "type": "Microsoft.AppConfiguration/configurationStores/keyValues",
+            "apiVersion": "2021-03-01-preview",
+            //"name": "[concat(parameters('appConfigName'), '/', if(contains(parameters('keyData')[copyIndex()], 'label'), format('{0}${1}', parameters('keyData')[copyIndex()].key, parameters('keyData')[copyIndex()].label), parameters('keyData')[copyIndex()].key)) ]",
+            "name": "[concat(parameters('appConfigName'), '/', concat('.appconfig.featureflag~2F', parameters('featureFlagData')[copyIndex()].featureFlagKey, '$', parameters('featureFlagData')[copyIndex()].featureFlagLabel) )]",
+            "dependsOn": [
+                "[resourceId('Microsoft.AppConfiguration/configurationStores', parameters('appConfigName'))]"
+            ],
+            "copy": {
+                "name": "FeatureFlagCopy",
+                "count": "[length(parameters('featureFlagData'))]"
+            },
+            "properties": {
+                "contentType": "[if(contains(parameters('featureFlagData')[copyIndex()], 'FeatureFlagcontentType'), parameters('featureFlagData')[copyIndex()].FeatureFlagcontentType, json('null'))]",
+                "value": "[string(parameters('featureFlagData')[copyIndex()].featureFlagValue)]"
+            }
+        },
+        // Use below for more than one keyvalue pair.     
+        {
+            "type": "Microsoft.AppConfiguration/configurationStores/keyValues",
+            "apiVersion": "2021-03-01-preview",
+            "name": "[concat(parameters('appConfigName'), '/', if(contains(parameters('keyData')[copyIndex()], 'label'), format('{0}${1}', parameters('keyData')[copyIndex()].key, parameters('keyData')[copyIndex()].label), parameters('keyData')[copyIndex()].key)) ]",
+            //"name": "[concat(parameters('appConfigName'), '/', if(equals(parameters('keyData')[copyIndex()].featureFlagDeploy,'True'), concat('.appconfig.featureflag~2F', parameters('featureFlagKey'), '$', parameters('featureFlagLabel')), if(contains(parameters('keyData')[copyIndex()], 'label'), format('{0}${1}', parameters('keyData')[copyIndex()].key, parameters('keyData')[copyIndex()].label), parameters('keyData')[copyIndex()].key))) ]",
+            "dependsOn": [
+                "[resourceId('Microsoft.AppConfiguration/configurationStores', parameters('appConfigName'))]"
+            ],
+            "copy": {
+                "name": "keyValueCopy",
+                "count": "[length(parameters('keyData'))]"
+            },
+            "properties": {
+                "contentType": "[if(contains(parameters('keyData')[copyIndex()], 'contentType'), parameters('keyData')[copyIndex()].contentType, json('null'))]",
+                "value": "[parameters('keyData')[copyIndex()].value]"
+            }
+        },
+        {
+            "type": "Microsoft.Network/privateEndpoints",
+            "apiVersion": "2020-05-01",
+            "name": "[variables('configPrivateEndPointsName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.AppConfiguration/configurationStores', parameters('appConfigName'))]"
+            ],
+            "properties": {
+                "privateLinkServiceConnections": [
+                    {
+                        "name": "[concat(parameters('appConfigName'), '-connection')]",
+                        "properties": {
+                            "privateLinkServiceId": "[resourceId('Microsoft.AppConfiguration/configurationStores', parameters('appConfigName'))]",
+                            "groupIds": [
+                                "configurationStores"
+                            ],
+                            "privateLinkServiceConnectionState": {
+                                "description": "Auto-Approved",
+                                "status": "Approved"
+                            }
+                        }
+                    }
+                ],
+                "subnet": {
+                    "id": "[variables('privateLinkSubnetRef')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+            "apiVersion": "2020-05-01",
+            "name": "[concat(variables('configPrivateEndPointsName'), '/private-', parameters('appConfigName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/privateEndpoints', variables('configPrivateEndPointsName'))]"
+            ],
+            "properties": {
+                "privateDnsZoneConfigs": [
+                    {
+                        "name": "privatelink.azconfig.io",
+                        "properties": {
+                            "privateDnsZoneId": "[variables('privateDnsZoneWebRef')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            //"Adding Role assignment to App Configuration ",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2020-08-01-preview",
+            "name": "[parameters('roleAssignmentArray')[copyIndex()].roleAssignmentId]",
+            "scope": "[concat('Microsoft.AppConfiguration/configurationStores', '/', parameters('appConfigName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.AppConfiguration/configurationStores', parameters('appConfigName'))]"
+            ],
+            "copy": {
+                "name": "keyValueCopy",
+                "count": "[length(parameters('roleAssignmentArray'))]"
+            },
+            "properties": {
+                "roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', '516239f1-63e1-4d78-a4de-a74fb236a071')]",
+                "principalId": "[reference(resourceId(subscription().subscriptionId, parameters('roleAssignmentArray')[copyIndex()].rgNameArray, 'Microsoft.Web/sites', parameters('roleAssignmentArray')[copyIndex()].appNameArray), '2020-06-01', 'Full').identity.principalId]"
+            }
+        }
+    ]
+}
